@@ -1,0 +1,10 @@
+digraph batch_lakehouse_daily {
+	graph [label=batch_lakehouse_daily labelloc=t rankdir=LR]
+	extract [color="#000000" fillcolor="#f0ede4" label=extract shape=rectangle style="filled,rounded"]
+	publish [color="#000000" fillcolor="#f0ede4" label=publish shape=rectangle style="filled,rounded"]
+	transform [color="#000000" fillcolor="#f0ede4" label=transform shape=rectangle style="filled,rounded"]
+	validate [color="#000000" fillcolor="#f0ede4" label=validate shape=rectangle style="filled,rounded"]
+	extract -> validate
+	transform -> publish
+	validate -> transform
+}

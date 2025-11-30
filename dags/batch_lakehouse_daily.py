@@ -22,7 +22,8 @@ with DAG(
         task_id="extract",
         bash_command=(
             "python /opt/airflow/jobs/ingest/ingest.py "
-            f"--out {DATA_DIR}/raw/{{{{ ds }}}}/data.csv"
+        "--src /opt/airflow/data/source/big.csv "     # <— WICHTIG: absolute Quelle
+        "--out /opt/airflow/data/raw/{{ ds }}/data.csv"
         ),
     )
 

@@ -1,22 +1,13 @@
-import argparse, os, csv, datetime
+import argparse, os, shutil
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--out", required=True, help="Output CSV path")
+parser.add_argument("--src", required=False, default="data/source/big.csv", help="Input CSV on host (mounted)")
+parser.add_argument("--out", required=True, help="Output CSV path (inside container mount)")
 args = parser.parse_args()
 
-out_path = args.out
-os.makedirs(os.path.dirname(out_path), exist_ok=True)
+# Container sieht ./data als /opt/airflow/data; die relativen Pfade funktionieren 1:1
+os.makedirs(os.path.dirname(args.out), exist_ok=True)
 
-today = datetime.date.today()
-rows = [
-    ["timestamp", "value"],
-    [f"{today}T00:00:00", "10"],
-    [f"{today}T01:00:00", "12"],
-    [f"{today}T02:00:00", "11"],
-]
-
-with open(out_path, "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerows(rows)
-
-print(f"Wrote demo data to {out_path}")
+assert os.path.exists(args.src), f"Quelle fehlt: {args.src}"
+shutil.copyfile(args.src, args.out)
+print(f"[INGEST] copied {args.src} -> {args.out}")
