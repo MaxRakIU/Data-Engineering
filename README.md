@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # Data-Engineering
 =======
 # Balanced Lakehouse – Grundgerüst (lokal)
@@ -45,4 +45,8 @@ docs/                 # Doku-Templates (Data Dictionary, Governance)
 ```bash
 make down
 ```
->>>>>>> 1c845fa (Phase 2: baseline pipeline (docker-compose, DAG, jobs, docs))
+
+## Ergebnis (Phase 2)
+End-to-End-Run erfolgreich (36 Mio. Zeilen möglich, speicherschonende Aggregation je Tag).
+Quality-Gate belegt: mehrere grüne Runs (curated), 1 absichtlich fehlerhafter Run (quarantine).
+Evidenz: `docs/graph.png`, `docs/data_tree.txt`, Logauszüge in Airflow-UI.
