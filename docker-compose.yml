@@ -1,0 +1,139 @@
+name: lakehouse-new
+
+services:
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9100:9000"
+      - "9101:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-mc:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: ["/bin/sh", "/scripts/minio_init.sh"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET_RAW: ${MINIO_BUCKET_RAW:-raw}
+      MINIO_BUCKET_STAGING: ${MINIO_BUCKET_STAGING:-staging}
+      MINIO_BUCKET_CURATED: ${MINIO_BUCKET_CURATED:-curated}
+      MINIO_BUCKET_QUARANTINE: ${MINIO_BUCKET_QUARANTINE:-quarantine}
+      MINIO_BUCKET_REPORTS: ${MINIO_BUCKET_REPORTS:-quality}
+      MINIO_READONLY_USER: ${MINIO_READONLY_USER:-}
+      MINIO_READONLY_PASSWORD: ${MINIO_READONLY_PASSWORD:-}
+
+  spark-master:
+    image: apache/spark:3.5.1
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    ports:
+      - "7077:7077"
+      - "8181:8080"
+    volumes:
+      - ./docker/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./jobs:/opt/jobs
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  spark-worker:
+    image: apache/spark:3.5.1
+    command: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.worker.Worker", "spark://spark-master:7077"]
+    depends_on:
+      - spark-master
+    volumes:
+      - ./docker/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./jobs:/opt/jobs
+
+  hive-metastore:
+    image: apache/hive:4.0.0
+    user: hive
+    environment:
+      SERVICE_NAME: metastore
+    ports:
+      - "9084:9083"
+    volumes:
+      - ./docker/hive/hive-metastore.sh:/opt/scripts/hive-metastore.sh
+      - ./docker/hive/jars:/opt/aux-jars
+      - ./docker/hive/hive-site.xml:/opt/hive/conf/hive-site.xml
+    entrypoint: ["/bin/bash", "/opt/scripts/hive-metastore.sh"]
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  airflow:
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    image: lakehouse-airflow:dev
+    depends_on:
+      - spark-master
+    environment:
+      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR:-SequentialExecutor}
+      AIRFLOW__CORE__LOAD_EXAMPLES: ${AIRFLOW__CORE__LOAD_EXAMPLES:-false}
+      AIRFLOW__WEBSERVER__WORKERS: ${AIRFLOW__WEBSERVER__WORKERS:-1}
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: ${AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT:-300}
+      AIRFLOW__WEBSERVER__WEB_SERVER_WORKER_TIMEOUT: ${AIRFLOW__WEBSERVER__WEB_SERVER_WORKER_TIMEOUT:-300}
+      PIP_ADDITIONAL_REQUIREMENTS: ""
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET_RAW: ${MINIO_BUCKET_RAW:-raw}
+      MINIO_BUCKET_STAGING: ${MINIO_BUCKET_STAGING:-staging}
+      MINIO_BUCKET_CURATED: ${MINIO_BUCKET_CURATED:-curated}
+      MINIO_BUCKET_QUARANTINE: ${MINIO_BUCKET_QUARANTINE:-quarantine}
+      MINIO_BUCKET_REPORTS: ${MINIO_BUCKET_REPORTS:-quality}
+      RAW_S3_KEY: ${RAW_S3_KEY:-tips/tips.csv}
+      LOCAL_FILE_PATH: ${LOCAL_FILE_PATH:-}
+      SKIP_IF_EXISTS: ${SKIP_IF_EXISTS:-false}
+      SENSITIVE_COLUMNS: ${SENSITIVE_COLUMNS:-}
+      MASK_STRATEGY: ${MASK_STRATEGY:-hash}
+      VALIDATE_MAX_MB: ${VALIDATE_MAX_MB:-50}
+      VALIDATE_CHUNK_SIZE: ${VALIDATE_CHUNK_SIZE:-200000}
+      VALIDATE_MIN_COLUMNS: ${VALIDATE_MIN_COLUMNS:-2}
+      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+    volumes:
+      - ./airflow:/opt/airflow
+      - ./scripts:/opt/scripts
+      - ./data:/opt/data
+      - ./jobs:/opt/jobs
+      - ./jobs:/opt/jobs
+      - ./data:/opt/data
+    ports:
+      - "8082:8080"
+    command: >
+      bash -c "airflow db migrate && \
+      airflow connections create-default-connections && \
+      airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com || true; \
+      airflow scheduler & \
+      exec airflow webserver --port 8080 --debug"
+
+  trino:
+    image: trinodb/trino:410
+    depends_on:
+      minio:
+        condition: service_healthy
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./trino/etc:/etc/trino
+      - ./trino/catalog:/etc/trino/catalog
+      - trino-data:/data/trino
+
+volumes:
+  minio-data:
+  trino-data:

@@ -1,0 +1,15 @@
+Run-Log (grosses Dataset)
+
+Dataset: instagram_users_lifestyle.csv
+Run-ID: manual__2026-02-04T20:06:57+00:00
+
+Status:
+- extract: success (20:07:42 - 20:07:54)
+- validate: success (20:16:20 - 20:16:35)
+- quarantine_notice: skipped
+- transform: success (20:16:41 - 20:17:55)
+- publish: success (20:18:01 - 20:18:58)
+
+Nachweis:
+- Smoke-Check: OK
+- Trino Count: 1.547.896
